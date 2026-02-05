@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"chat-backend/models"
+	"chat/models"
 	"database/sql"
 	"encoding/json"
 	"log"

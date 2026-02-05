@@ -1,9 +1,9 @@
 package main
 
 import (
-	"chat-backend/config"
-	"chat-backend/database"
-	"chat-backend/handlers"
+	"chat/config"
+	"chat/database"
+	"chat/handlers"
 	"log"
 	"time"
 

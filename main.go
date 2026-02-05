@@ -5,7 +5,8 @@ import (
 	"chat/config"
 	"chat/database"
 	"chat/handlers"
-	"flag" // Nuevo: para capturar comandos
+	"database/sql" // <--- AGREGADO
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -14,15 +15,14 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"golang.org/x/crypto/bcrypt" // Necesario para el hash del admin
+	_ "github.com/lib/pq" // Asegura el driver para el QueryRow
+	"golang.org/x/crypto/bcrypt"
 )
 
 func main() {
-	// 1. Definir la bandera para crear usuario
 	createUserMode := flag.Bool("create-user", false, "Activar modo creación de usuario")
 	flag.Parse()
 
-	// 2. Cargar configuración y conectar a DB (Común para ambos modos)
 	cfg := config.Load()
 	db, err := database.Connect(cfg.DatabaseURL)
 	if err != nil {
@@ -30,13 +30,11 @@ func main() {
 	}
 	defer db.Close()
 
-	// 3. Si la bandera --create-user está presente, ejecutar lógica de script
 	if *createUserMode {
 		runCreateUserCommand(db)
-		return // Finalizar ejecución aquí
+		return 
 	}
 
-	// --- INICIO MODO SERVIDOR (Lo que ya tenías) ---
 	if err := database.Migrate(db); err != nil {
 		log.Fatal("Error creando tablas:", err)
 	}
@@ -70,8 +68,8 @@ func main() {
 	router.Run(":" + cfg.Port)
 }
 
-// Función auxiliar con la lógica de tu script
-func runCreateUserCommand(db *database.sql.DB) {
+// CORREGIDO: Usamos *sql.DB directamente
+func runCreateUserCommand(db *sql.DB) {
 	fmt.Println("\n=== MODO ADMINISTRADOR: CREAR USUARIO ===")
 	reader := bufio.NewReader(os.Stdin)
 
@@ -80,8 +78,6 @@ func runCreateUserCommand(db *database.sql.DB) {
 	username = strings.TrimSpace(username)
 
 	fmt.Print("Password: ")
-	// Nota: En Docker interactivo, term.ReadPassword puede fallar. 
-	// Usaremos lectura simple por ahora para asegurar compatibilidad.
 	password, _ := reader.ReadString('\n')
 	password = strings.TrimSpace(password)
 

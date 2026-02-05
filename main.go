@@ -69,4 +69,4 @@ func main() {
 
 	log.Printf("🚀 Servidor corriendo en puerto %s", cfg.Port)
 	router.Run(":" + cfg.Port)
-}main.go
+}

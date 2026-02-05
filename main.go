@@ -5,22 +5,25 @@ import (
 	"chat/config"
 	"chat/database"
 	"chat/handlers"
-	"database/sql" // <--- AGREGADO
+	"database/sql"
 	"flag"
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	_ "github.com/lib/pq" // Asegura el driver para el QueryRow
+	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
 )
 
 func main() {
+	// 1. Definir banderas
 	createUserMode := flag.Bool("create-user", false, "Activar modo creación de usuario")
+	createChatMode := flag.String("create-chat", "", "ID de usuarios a conectar (ej: 1,2)")
 	flag.Parse()
 
 	cfg := config.Load()
@@ -30,11 +33,18 @@ func main() {
 	}
 	defer db.Close()
 
+	// 2. Lógica de comandos CLI
 	if *createUserMode {
 		runCreateUserCommand(db)
-		return 
+		return
 	}
 
+	if *createChatMode != "" {
+		runCreateChatCommand(db, *createChatMode)
+		return
+	}
+
+	// --- MODO SERVIDOR ---
 	if err := database.Migrate(db); err != nil {
 		log.Fatal("Error creando tablas:", err)
 	}
@@ -68,29 +78,50 @@ func main() {
 	router.Run(":" + cfg.Port)
 }
 
-// CORREGIDO: Usamos *sql.DB directamente
+// Función para crear el usuario (ya la tenías)
 func runCreateUserCommand(db *sql.DB) {
 	fmt.Println("\n=== MODO ADMINISTRADOR: CREAR USUARIO ===")
 	reader := bufio.NewReader(os.Stdin)
-
 	fmt.Print("Username: ")
 	username, _ := reader.ReadString('\n')
 	username = strings.TrimSpace(username)
-
 	fmt.Print("Password: ")
 	password, _ := reader.ReadString('\n')
 	password = strings.TrimSpace(password)
-
 	hash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-
 	var userID int
+	err := db.QueryRow("INSERT INTO users (username, password_hash) VALUES ($1, $2) RETURNING id", username, string(hash)).Scan(&userID)
+	if err != nil { log.Fatal("❌ Error:", err) }
+	fmt.Printf("\n✅ Usuario %s creado con ID: %d\n", username, userID)
+}
+
+// NUEVA FUNCIÓN: Crear chat entre dos IDs
+func runCreateChatCommand(db *sql.DB, idsRaw string) {
+	ids := strings.Split(idsRaw, ",")
+	if len(ids) != 2 {
+		log.Fatal("❌ Formato inválido. Usa: --create-chat=1,2")
+	}
+
+	u1, _ := strconv.Atoi(ids[0])
+	u2, _ := strconv.Atoi(ids[1])
+
+	// Aplicar lógica de ordenamiento para cumplir el CHECK (user1_id < user2_id)
+	if u1 == u2 { log.Fatal("❌ No puedes crear un chat contigo mismo") }
+	if u1 > u2 { u1, u2 = u2, u1 }
+
+	var chatID int
 	err := db.QueryRow(
-		"INSERT INTO users (username, password_hash) VALUES ($1, $2) RETURNING id",
-		username, string(hash),
-	).Scan(&userID)
+		"INSERT INTO chats (user1_id, user2_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING id",
+		u1, u2,
+	).Scan(&chatID)
 
 	if err != nil {
-		log.Fatal("❌ Error:", err)
+		if err == sql.ErrNoRows {
+			fmt.Println("⚠️ El chat ya existía.")
+		} else {
+			log.Fatal("❌ Error creando chat:", err)
+		}
+		return
 	}
-	fmt.Printf("\n✅ Usuario %s creado con ID: %d\n", username, userID)
+	fmt.Printf("✅ Chat creado exitosamente con ID: %d entre usuarios %d y %d\n", chatID, u1, u2)
 }

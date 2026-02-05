@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"chat-backend/config"
+	"chat/config"
 	"database/sql"
 	"net/http"
 	"strings"

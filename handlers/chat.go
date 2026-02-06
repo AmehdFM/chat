@@ -153,51 +153,37 @@ func (h *ChatHandler) GetChatMessages(c *gin.Context) {
 	c.JSON(http.StatusOK, messages)
 }
 
-// SendMessage - Enviar un mensaje
+// SendMessage - Enviar un mensaje (MODIFICADO para aceptar chat_id)
 func (h *ChatHandler) SendMessage(c *gin.Context) {
 	userID := c.GetInt("user_id")
 
 	var req struct {
-		ReceiverID int    `json:"receiver_id" binding:"required"`
-		Content    string `json:"content" binding:"required,min=1"`
+		ChatID  int    `json:"chat_id" binding:"required"`
+		Content string `json:"content" binding:"required,min=1"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Datos inválidos"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Datos inválidos: " + err.Error()})
 		return
 	}
 
-	// Verificar que el receptor existe
-	var receiverExists bool
-	err := h.db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)", req.ReceiverID).Scan(&receiverExists)
-	if err != nil || !receiverExists {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Usuario receptor no existe"})
-		return
-	}
-
-	// No puedes enviarte mensajes a ti mismo
-	if userID == req.ReceiverID {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "No puedes enviarte mensajes a ti mismo"})
-		return
-	}
-
-	// Obtener o crear el chat (siempre user1_id < user2_id)
-	user1ID := userID
-	user2ID := req.ReceiverID
-	if user1ID > user2ID {
-		user1ID, user2ID = user2ID, user1ID
-	}
-
-	var chatID int
-	err = h.db.QueryRow(`
-		INSERT INTO chats (user1_id, user2_id)
-		VALUES ($1, $2)
-		ON CONFLICT (user1_id, user2_id) DO UPDATE SET user1_id = chats.user1_id
-		RETURNING id
-	`, user1ID, user2ID).Scan(&chatID)
+	// Verificar que el usuario pertenece a este chat y obtener el receiver_id
+	var receiverID int
+	err := h.db.QueryRow(`
+		SELECT CASE 
+			WHEN user1_id = $1 THEN user2_id 
+			ELSE user1_id 
+		END as receiver_id
+		FROM chats 
+		WHERE id = $2 AND (user1_id = $1 OR user2_id = $1)
+	`, userID, req.ChatID).Scan(&receiverID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error creando chat"})
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusForbidden, gin.H{"error": "No tienes acceso a este chat"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error verificando chat"})
+		}
 		return
 	}
 
@@ -207,7 +193,7 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 		INSERT INTO messages (chat_id, sender_id, content)
 		VALUES ($1, $2, $3)
 		RETURNING id, chat_id, sender_id, content, created_at
-	`, chatID, userID, req.Content).Scan(
+	`, req.ChatID, userID, req.Content).Scan(
 		&message.ID,
 		&message.ChatID,
 		&message.SenderID,
@@ -221,7 +207,7 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 	}
 
 	// Notificar por WebSocket al receptor
-	notifyNewMessage(req.ReceiverID, message)
+	notifyNewMessage(receiverID, message)
 
 	c.JSON(http.StatusCreated, message)
 }

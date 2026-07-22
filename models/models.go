@@ -14,11 +14,10 @@ type Chat struct {
 	User1ID   int       `json:"user1_id"`
 	User2ID   int       `json:"user2_id"`
 	CreatedAt time.Time `json:"created_at"`
-	
-	// Campos adicionales para la respuesta
-	OtherUserID   int    `json:"other_user_id"`
-	OtherUsername string `json:"other_username"`
-	LastMessage   string `json:"last_message,omitempty"`
+
+	OtherUserID   int        `json:"other_user_id"`
+	OtherUsername string     `json:"other_username"`
+	LastMessage   string     `json:"last_message,omitempty"`
 	LastMessageAt *time.Time `json:"last_message_at,omitempty"`
 }
 

@@ -21,7 +21,6 @@ import (
 )
 
 func main() {
-	// 1. Definir banderas
 	createUserMode := flag.Bool("create-user", false, "Activar modo creación de usuario")
 	createChatMode := flag.String("create-chat", "", "ID de usuarios a conectar (ej: 1,2)")
 	flag.Parse()
@@ -33,7 +32,6 @@ func main() {
 	}
 	defer db.Close()
 
-	// 2. Lógica de comandos CLI
 	if *createUserMode {
 		runCreateUserCommand(db)
 		return
@@ -44,7 +42,6 @@ func main() {
 		return
 	}
 
-	// --- MODO SERVIDOR ---
 	if err := database.Migrate(db); err != nil {
 		log.Fatal("Error creando tablas:", err)
 	}
@@ -64,13 +61,9 @@ func main() {
 		MaxAge:           12 * time.Hour,
 	}))
 
-	// Ruta pública de login
 	router.POST("/api/login", authHandler.Login)
-
-	// IMPORTANTE: WebSocket sin middleware (usa token en query param)
 	router.GET("/api/stream", wsHandler.HandleStreamWithToken)
 
-	// Rutas protegidas con middleware
 	authorized := router.Group("/api")
 	authorized.Use(authHandler.AuthMiddleware())
 	{
@@ -83,7 +76,6 @@ func main() {
 	router.Run(":" + cfg.Port)
 }
 
-// Función para crear el usuario
 func runCreateUserCommand(db *sql.DB) {
 	fmt.Println("\n=== MODO ADMINISTRADOR: CREAR USUARIO ===")
 	reader := bufio.NewReader(os.Stdin)
@@ -107,7 +99,6 @@ func runCreateUserCommand(db *sql.DB) {
 	fmt.Printf("\n✅ Usuario %s creado con ID: %d\n", username, userID)
 }
 
-// Crear chat entre dos IDs
 func runCreateChatCommand(db *sql.DB, idsRaw string) {
 	ids := strings.Split(idsRaw, ",")
 	if len(ids) != 2 {
@@ -117,7 +108,6 @@ func runCreateChatCommand(db *sql.DB, idsRaw string) {
 	u1, _ := strconv.Atoi(ids[0])
 	u2, _ := strconv.Atoi(ids[1])
 
-	// Aplicar lógica de ordenamiento
 	if u1 == u2 {
 		log.Fatal("❌ No puedes crear un chat contigo mismo")
 	}

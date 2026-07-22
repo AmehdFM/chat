@@ -17,7 +17,6 @@ func NewChatHandler(db *sql.DB) *ChatHandler {
 	return &ChatHandler{db: db}
 }
 
-// GetUserChats - Obtener todos los chats del usuario
 func (h *ChatHandler) GetUserChats(c *gin.Context) {
 	userID := c.GetInt("user_id")
 
@@ -100,7 +99,6 @@ func (h *ChatHandler) GetUserChats(c *gin.Context) {
 	c.JSON(http.StatusOK, chats)
 }
 
-// GetChatMessages - Obtener todos los mensajes de un chat
 func (h *ChatHandler) GetChatMessages(c *gin.Context) {
 	userID := c.GetInt("user_id")
 	chatID, err := strconv.Atoi(c.Param("chat_id"))
@@ -109,7 +107,6 @@ func (h *ChatHandler) GetChatMessages(c *gin.Context) {
 		return
 	}
 
-	// Verificar que el usuario pertenece a este chat
 	var exists bool
 	err = h.db.QueryRow(`
 		SELECT EXISTS(
@@ -123,7 +120,6 @@ func (h *ChatHandler) GetChatMessages(c *gin.Context) {
 		return
 	}
 
-	// Obtener mensajes
 	rows, err := h.db.Query(`
 		SELECT id, chat_id, sender_id, content, created_at
 		FROM messages
@@ -153,7 +149,6 @@ func (h *ChatHandler) GetChatMessages(c *gin.Context) {
 	c.JSON(http.StatusOK, messages)
 }
 
-// SendMessage - Enviar un mensaje (MODIFICADO para aceptar chat_id)
 func (h *ChatHandler) SendMessage(c *gin.Context) {
 	userID := c.GetInt("user_id")
 
@@ -167,7 +162,6 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 		return
 	}
 
-	// Verificar que el usuario pertenece a este chat y obtener el receiver_id
 	var receiverID int
 	err := h.db.QueryRow(`
 		SELECT CASE 
@@ -187,7 +181,6 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 		return
 	}
 
-	// Insertar mensaje
 	var message models.Message
 	err = h.db.QueryRow(`
 		INSERT INTO messages (chat_id, sender_id, content)
@@ -206,7 +199,6 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 		return
 	}
 
-	// Notificar por WebSocket al receptor
 	notifyNewMessage(receiverID, message)
 
 	c.JSON(http.StatusCreated, message)

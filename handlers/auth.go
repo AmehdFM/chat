@@ -36,7 +36,6 @@ type LoginResponse struct {
 	Username string `json:"username"`
 }
 
-// Login - Autenticar usuario
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -44,7 +43,6 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// Buscar usuario
 	var userID int
 	var username string
 	var passwordHash string
@@ -59,17 +57,15 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// Verificar contraseña
 	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Usuario o contraseña incorrectos"})
 		return
 	}
 
-	// Generar JWT
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"user_id":  userID,
 		"username": username,
-		"exp":      time.Now().Add(30 * 24 * time.Hour).Unix(), // 30 días
+		"exp":      time.Now().Add(30 * 24 * time.Hour).Unix(),
 	})
 
 	tokenString, err := token.SignedString(h.jwtSecret)
@@ -85,7 +81,6 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	})
 }
 
-// AuthMiddleware - Verificar token JWT
 func (h *AuthHandler) AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
@@ -95,7 +90,6 @@ func (h *AuthHandler) AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Formato: "Bearer <token>"
 		parts := strings.Split(authHeader, " ")
 		if len(parts) != 2 || parts[0] != "Bearer" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Formato de token inválido"})
@@ -105,7 +99,6 @@ func (h *AuthHandler) AuthMiddleware() gin.HandlerFunc {
 
 		tokenString := parts[1]
 
-		// Verificar token
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			return h.jwtSecret, nil
 		})
@@ -116,7 +109,6 @@ func (h *AuthHandler) AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Extraer claims
 		if claims, ok := token.Claims.(jwt.MapClaims); ok {
 			c.Set("user_id", int(claims["user_id"].(float64)))
 			c.Set("username", claims["username"].(string))

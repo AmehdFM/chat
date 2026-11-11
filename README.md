@@ -1,114 +1,93 @@
-# Chat API
+# Chat API | Mensajería en tiempo real con Go
 
-Backend REST + WebSocket para una aplicación de mensajería 1 a 1, escrito en Go con Gin, PostgreSQL y autenticación JWT.
+Backend para integrar conversaciones individuales en una aplicación web o móvil. Combina una API REST para autenticación e historial con WebSocket para notificar mensajes nuevos, manteniendo los datos en PostgreSQL.
 
-## Características
+## Qué permite construir
 
-- Autenticación mediante JWT (login con usuario y contraseña, hash con bcrypt)
-- Chats 1 a 1 entre usuarios (sin duplicados, orden canónico de IDs)
-- Historial de mensajes por chat
-- Notificaciones en tiempo real vía WebSocket cuando llega un mensaje nuevo
-- Migraciones automáticas de esquema al iniciar el servidor
-- Herramientas de línea de comandos para crear usuarios y chats administrativamente
+Una base de mensajería para herramientas internas, atención o colaboración donde cada usuario pueda consultar sus conversaciones y recibir eventos en tiempo real. Este repositorio contiene el servidor y sus herramientas administrativas; el cliente visual se desarrolla por separado.
 
-## Stack técnico
+## Funcionalidades implementadas
 
-| Componente        | Tecnología                              |
-|--------------------|------------------------------------------|
-| Lenguaje           | Go 1.21                                   |
-| Framework HTTP     | [Gin](https://github.com/gin-gonic/gin)   |
-| Base de datos      | PostgreSQL (`lib/pq`)                     |
-| WebSocket          | `gorilla/websocket`                       |
-| Autenticación      | JWT (`golang-jwt/jwt/v5`) + bcrypt        |
-| CORS               | `gin-contrib/cors`                        |
+- Inicio de sesión con contraseñas almacenadas mediante bcrypt y emisión de JWT.
+- Conversaciones uno a uno, con orden canónico de participantes para evitar duplicados.
+- Consulta de conversaciones e historial de mensajes.
+- Comprobación de pertenencia al chat en las operaciones de mensajes.
+- Notificaciones WebSocket al destinatario conectado.
+- Creación de usuarios y conversaciones mediante comandos.
+- Creación de tablas al iniciar el servidor y empaquetado Docker.
 
-## Estructura del proyecto
+## Tecnologías y estructura
 
-```
-chat/
-├── main.go                    # Punto de entrada: servidor HTTP/WS y comandos CLI
-├── config/
-│   └── config.go              # Carga de configuración desde variables de entorno
-├── database/
-│   └── database.go            # Conexión a PostgreSQL y migraciones
-├── handlers/
-│   ├── auth.go                # Login, generación de JWT y middleware de autenticación
-│   ├── chat.go                # Endpoints de chats y mensajes
-│   └── websocket.go           # Manejo de conexiones WebSocket y notificaciones push
-├── models/
-│   └── models.go              # Structs: User, Chat, Message
-├── cmd/
-│   └── create-user/
-│       └── main.go            # Binario independiente para crear usuarios con password oculto
-├── Dockerfile
-├── go.mod
-└── go.sum
-```
+**Go · Gin · PostgreSQL · JWT · bcrypt · Gorilla WebSocket · Docker**
 
-## Requisitos
+| Ruta | Responsabilidad |
+|---|---|
+| [main.go](main.go) | Arranque, rutas y comandos administrativos |
+| [config/](config/) | Variables de entorno |
+| [database/](database/) | Conexión y creación de tablas |
+| [handlers/](handlers/) | Autenticación, conversaciones y WebSocket |
+| [models/](models/) | Modelos de usuarios, chats y mensajes |
+| [cmd/create-user/](cmd/create-user/) | Alta de usuarios con contraseña oculta |
+| [Dockerfile](Dockerfile) | Compilación en etapas e imagen de ejecución |
 
-- Go 1.21+
-- PostgreSQL 13+
+## Ejecutar localmente
 
-## Configuración
+Requisitos: Go compatible con [go.mod](go.mod), que declara Go 1.21, y PostgreSQL. Crear previamente una base de desarrollo llamada `chat_db`.
 
-El servidor se configura mediante variables de entorno:
-
-| Variable       | Requerida | Descripción                                   | Valor por defecto        |
-|----------------|-----------|------------------------------------------------|---------------------------|
-| `DATABASE_URL` | Sí        | Cadena de conexión a PostgreSQL                | —                          |
-| `PORT`         | No        | Puerto donde escucha el servidor HTTP          | `8080`                     |
-| `JWT_SECRET`   | No        | Secreto usado para firmar los tokens JWT       | `change-this-secret-key`   |
-
-> **Importante:** cambia `JWT_SECRET` en producción. El valor por defecto solo existe para desarrollo local.
-
-Ejemplo de `DATABASE_URL`:
-```
-postgres://usuario:password@localhost:5432/chat_db?sslmode=disable
-```
-
-## Instalación y ejecución
+Los comandos de entorno siguientes usan Bash:
 
 ```bash
-# Instalar dependencias
+git clone https://github.com/AmehdFM/chat.git
+cd chat
 go mod download
-
-# Definir variables de entorno
 export DATABASE_URL="postgres://usuario:password@localhost:5432/chat_db?sslmode=disable"
-export JWT_SECRET="un-secreto-fuerte"
+export JWT_SECRET="$(openssl rand -hex 32)"
 export PORT=8080
-
-# Ejecutar el servidor
-go run main.go
+go run .
 ```
 
-Al iniciar en modo servidor, se crean automáticamente las tablas `users`, `chats` y `messages` si no existen.
+El servidor crea las tablas durante el arranque. Para preparar datos desde los comandos administrativos, iniciar primero el servidor una vez y después detenerlo o abrir otra terminal con las mismas variables.
 
-## Docker
+| Variable | Uso |
+|---|---|
+| `DATABASE_URL` | Conexión PostgreSQL, obligatoria |
+| `JWT_SECRET` | Firma de JWT; configurar un valor propio |
+| `PORT` | Puerto HTTP; predeterminado: `8080` |
+
+Los ejemplos de conexión son para una base local de desarrollo. Ajustar usuario, contraseña y TLS al entorno utilizado.
+
+### Crear usuarios y una conversación
+
+```bash
+go run ./cmd/create-user
+# Repetir para el segundo usuario.
+go run . --create-chat=1,2
+go run .
+```
+
+Sustituir `1,2` por los identificadores devueltos al crear los usuarios. El comando alternativo `go run . --create-user` también existe, pero muestra la contraseña al escribirla.
+
+### Docker
+
+La base debe ser accesible desde el contenedor. Establecer `DATABASE_URL` con ese host; `localhost` dentro del contenedor apunta al propio contenedor.
 
 ```bash
 docker build -t chat-api .
-docker run -e DATABASE_URL="postgres://usuario:password@host:5432/chat_db" -p 8080:8080 chat-api
+docker run --rm -p 8080:8080 \
+  -e DATABASE_URL -e JWT_SECRET -e PORT chat-api
 ```
 
-## Herramientas de línea de comandos
+## Recorrido de demostración
 
-El binario principal soporta dos modos administrativos además del modo servidor:
+1. Crear dos usuarios y una conversación.
+2. Iniciar sesión para obtener los tokens.
+3. Abrir el WebSocket con uno de los usuarios.
+4. Enviar un mensaje desde el otro y observar el evento.
+5. Consultar el historial por REST para comprobar la persistencia.
 
-**Crear un usuario:**
-```bash
-go run main.go --create-user
-```
+## Estado y alcance
 
-**Crear un chat entre dos usuarios existentes:**
-```bash
-go run main.go --create-chat=1,2
-```
-
-También existe un binario independiente en `cmd/create-user`, equivalente al flag `--create-user` pero con el password oculto al escribirlo en terminal:
-```bash
-go run ./cmd/create-user
-```
+Implementación de backend para desarrollo y demostración. El repositorio no incluye una suite de pruebas automatizadas. Antes de un despliegue público, revisar orígenes WebSocket/CORS, validación de claims, gestión y duración de tokens, límites de solicitudes y concurrencia de conexiones. El código permite un secreto JWT predeterminado: configurar siempre `JWT_SECRET` y evitar registrar URLs con tokens.
 
 ## API
 
@@ -203,3 +182,8 @@ Evento al recibir un mensaje nuevo:
 - Las contraseñas se almacenan con `bcrypt`, nunca en texto plano.
 - CORS está actualmente configurado para aceptar cualquier origen (`AllowOrigins: []string{"*"}`); se recomienda restringirlo a los dominios del frontend antes de pasar a producción.
 - El WebSocket acepta conexiones de cualquier origen (`CheckOrigin` siempre retorna `true`); considerar restringirlo también en producción.
+
+
+## Autor
+
+[Amehd Mendez](https://github.com/AmehdFM) · Backend e integración de sistemas.
